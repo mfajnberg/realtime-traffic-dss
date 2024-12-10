@@ -1,0 +1,84 @@
+:- use_module(library(socket)).
+
+kann_fahren(Fahrzeug) :-
+    Fahrzeug = fahrzeug(Pos, _),
+    \+ (fahrzeug(KonfliktPos, KonfliktRichtung), konflikt(Fahrzeug, fahrzeug(KonfliktPos, KonfliktRichtung))).
+
+konflikt(fahrzeug(Pos1, Richtung1), fahrzeug(Pos2, Richtung2)) :-
+    kreuzung(Pos1, Richtung1, Pos2, Richtung2).
+
+kreuzung(norden, geradeaus, westen, _).
+kreuzung(norden, links, sueden, geradeaus).
+kreuzung(norden, links, sueden, rechts).
+kreuzung(norden, links, westen, geradeaus).
+kreuzung(norden, links, westen, links).
+kreuzung(osten, geradeaus, norden, _).
+kreuzung(osten, links, westen, geradeaus).
+kreuzung(osten, links, westen, rechts).
+kreuzung(osten, links, norden, geradeaus).
+kreuzung(osten, links, norden, links).
+kreuzung(sueden, geradeaus, osten, _).
+kreuzung(sueden, links, norden, geradeaus).
+kreuzung(sueden, links, norden, rechts).
+kreuzung(sueden, links, osten, geradeaus).
+kreuzung(sueden, links, osten, links).
+kreuzung(westen, geradeaus, sueden, _).
+kreuzung(westen, links, osten, geradeaus).
+kreuzung(westen, links, osten, rechts).
+kreuzung(westen, links, sueden, geradeaus).
+kreuzung(westen, links, sueden, links).
+
+fahrzeug(norden, geradeaus).
+fahrzeug(osten, links).
+fahrzeug(sueden, rechts).
+fahrzeug(westen, geradeaus).
+
+?- kann_fahren(fahrzeug(norden, geradeaus)).
+?- kann_fahren(fahrzeug(osten, links)).
+?- kann_fahren(fahrzeug(sueden, rechts)).
+?- kann_fahren(fahrzeug(westen, geradeaus)).
+
+kann_fahren(Fahrzeug) :-
+    Fahrzeug = fahrzeug(Pos, Richtung, Geschwindigkeit),
+    (geschwindigkeit_ok(Fahrzeug) ; sonderfahrzeug(Fahrzeug)),
+    \+ (fahrzeug(KonfliktPos, KonfliktRichtung, _),
+        konflikt(fahrzeug(Pos, Richtung), fahrzeug(KonfliktPos, KonfliktRichtung))).
+
+geschwindigkeit_ok(fahrzeug(_, _, Geschwindigkeit)) :-
+    Geschwindigkeit =< 50.
+
+sonderfahrzeug(fahrzeug(_, _, _)) :-
+    fahrzeug_typ(fahrzeug(krankenwagen)).
+
+fahrzeug_typ(fahrzeug(krankenwagen)).
+fahrzeug_typ(fahrzeug(feuerwehr)).
+fahrzeug_typ(fahrzeug(polizei)).
+
+konflikt(fahrzeug(Pos1, Richtung1), fahrzeug(Pos2, Richtung2)) :-
+    kreuzung(Pos1, Richtung1, Pos2, Richtung2).
+
+start_server(Port) :-
+    tcp_socket(Socket),
+    tcp_bind(Socket, Port),
+    tcp_listen(Socket, 5),
+    tcp_accept(Socket, Client, _),
+    process_client(Client),
+    tcp_close_socket(Socket).
+
+process_client(Client) :-
+    tcp_open_socket(Client, In, Out),
+    read_line_to_string(In, InputString),
+    parse_input(InputString, FahrzeugDaten),
+    decide(FahrzeugDaten, Entscheidung, Geschwindigkeit),
+    format(Out, 'Decision: ~w, Speed: ~w\n', [Entscheidung, Geschwindigkeit]),
+    close(In),
+    close(Out).
+
+parse_input(InputString, fahrzeug(Pos, Richtung, Geschwindigkeit)) :-
+    split_string(InputString, ",", " ", [Pos, Richtung, GeschwindigkeitString]),
+    number_string(Geschwindigkeit, GeschwindigkeitString).
+
+decide(fahrzeug(Pos, Richtung, Geschwindigkeit), Entscheidung, NeueGeschwindigkeit) :-
+    kann_fahren(fahrzeug(Pos, Richtung, Geschwindigkeit)) ->
+        (Entscheidung = 'proceed', NeueGeschwindigkeit = Geschwindigkeit);
+        (Entscheidung = 'stop', NeueGeschwindigkeit = 0).
